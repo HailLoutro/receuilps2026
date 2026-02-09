@@ -9,14 +9,14 @@ import ClientRecueil from "./pages/client/ClientRecueil";
 function ProtectedAdmin({ children }) {
   const { ready, user } = useApp();
   if (!ready) return <LoadingScreen />;
-  if (!user || user.type !== "admin") return <Navigate to="/admin/login" />;
+  if (!user || user.type !== "admin") return <Navigate to="/admin/login" replace />;
   return children;
 }
 
 function ProtectedClient({ children }) {
   const { ready, user } = useApp();
   if (!ready) return <LoadingScreen />;
-  if (!user || user.type !== "client") return <Navigate to="/client" />;
+  if (!user || user.type !== "client") return <Navigate to="/client" replace />;
   return children;
 }
 
@@ -27,13 +27,15 @@ function AppRoutes() {
       <Route path="/admin/login" element={<LoginPage mode="admin" />} />
       <Route path="/admin" element={<ProtectedAdmin><AdminPanel /></ProtectedAdmin>} />
 
-      {/* Client */}
+      {/* Client login */}
       <Route path="/client" element={<LoginPage mode="client" />} />
       <Route path="/client/:slug" element={<LoginPage mode="client" />} />
-      <Route path="/client/app" element={<ProtectedClient><ClientRecueil /></ProtectedClient>} />
+
+      {/* Client app (route séparée, aucun conflit) */}
+      <Route path="/recueil" element={<ProtectedClient><ClientRecueil /></ProtectedClient>} />
 
       {/* Default */}
-      <Route path="*" element={<Navigate to="/admin/login" />} />
+      <Route path="*" element={<Navigate to="/admin/login" replace />} />
     </Routes>
   );
 }

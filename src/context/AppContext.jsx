@@ -23,65 +23,66 @@ export function AppProvider({ children }) {
   const [saving, setSaving] = useState(false);
   const [backups, setBackups] = useState([]);
 
-  // ── Init ────────────────────────────────────────────────────
+  // ── Init : charge le template TOUJOURS (admin OU client) ──
   useEffect(() => {
-    (async () => {
-      // Listen for admin auth
-      Auth.onAuthChange(async adminUser => {
-        if (adminUser && adminUser.role === "admin") {
-          setUser({ type: "admin", ...adminUser });
-          let t = await DB.getTemplate();
-          if (!t) { t = buildDefaultTemplate(); await DB.saveTemplate(t); }
-          setTemplate(t);
-          setClients(await DB.getClients());
-          setBackups(await DB.getBackups());
-        }
-        setReady(true);
-      });
-    })();
+    const loadTemplate = async () => {
+      let t = await DB.getTemplate();
+      if (!t) { t = buildDefaultTemplate(); await DB.saveTemplate(t); }
+      setTemplate(t);
+    };
+
+    Auth.onAuthChange(async adminUser => {
+      if (adminUser && adminUser.role === "admin") {
+        setUser({ type: "admin", ...adminUser });
+        await loadTemplate();
+        setClients(await DB.getClients());
+        setBackups(await DB.getBackups());
+      } else {
+        // Pas d'admin → charge quand même le template (pour le client)
+        await loadTemplate();
+      }
+      setReady(true);
+    });
   }, []);
 
   // ── Template save (debounced) ───────────────────────────────
   const _saveT = useCallback(async t => {
-    setSaving(true);
-    await DB.saveTemplate(t);
-    setSaving(false);
+    setSaving(true); await DB.saveTemplate(t); setSaving(false);
   }, []);
   const dbSaveT = useDebounce(_saveT, 600);
   const sT = t => { setTemplate(t); dbSaveT(t); };
 
   // ── Client data save (debounced) ────────────────────────────
   const _saveCD = useCallback(async (slug, d) => {
-    setSaving(true);
-    await DB.saveClientData(slug, d);
-    setSaving(false);
+    setSaving(true); await DB.saveClientData(slug, d); setSaving(false);
   }, []);
   const dbSaveCD = useDebounce((slug, d) => _saveCD(slug, d), 600);
   const sCD = (slug, d) => { setCData(d); dbSaveCD(slug, d); };
 
-  // ── FIX #1: Client CRUD only touches clients[], not user ───
   const refreshClients = async () => { setClients(await DB.getClients()); };
 
-  // ── Load client data ────────────────────────────────────────
   const lCD = async slug => {
     const d = await DB.getClientData(slug);
     setCData(d);
     return d;
   };
 
-  // ── FIX #2: Client login via Firestore (not Firebase Auth) ──
+  // ── Client login : query Firestore directement ─────────────
+  // Ne dépend PAS du state clients — requête Firestore à chaque appel
   const loginClient = async (slug, username, password) => {
-    const client = await Auth.loginClient(slug, username, password);
-    if (!client) return false;
-    setUser(client);
-    let t = await DB.getTemplate();
-    if (!t) { t = buildDefaultTemplate(); await DB.saveTemplate(t); }
-    setTemplate(t);
-    await lCD(client.slug);
-    return true;
+    try {
+      const client = await Auth.loginClient(slug, username, password);
+      if (!client) return false;
+      setUser(client);
+      await lCD(client.slug);
+      return true;
+    } catch (err) {
+      console.error("loginClient error:", err);
+      return false;
+    }
   };
 
-  // ── FIX #5: Backup / Restore ────────────────────────────────
+  // ── Backup / Restore ───────────────────────────────────────
   const backupTpl = async label => {
     const b = {
       id: `bk_${Date.now()}`,
@@ -90,21 +91,17 @@ export function AppProvider({ children }) {
       createdAt: new Date().toISOString(),
     };
     const nb = [b, ...backups].slice(0, 20);
-    setBackups(nb);
-    await DB.saveBackups(nb);
+    setBackups(nb); await DB.saveBackups(nb);
   };
   const restoreTpl = async id => {
     const b = backups.find(x => x.id === id);
     if (!b) return;
-    setTemplate(b.template);
-    await DB.saveTemplate(b.template);
+    setTemplate(b.template); await DB.saveTemplate(b.template);
   };
 
-  // ── Logout ──────────────────────────────────────────────────
   const logout = async () => {
     if (user?.type === "admin") await Auth.logoutUser();
-    setUser(null);
-    setCData({});
+    setUser(null); setCData({});
   };
 
   return (
