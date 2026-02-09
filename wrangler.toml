@@ -1,0 +1,7 @@
+# ━━ Cloudflare Pages — wrangler.toml ━━
+# Déployer avec : npx wrangler pages deploy dist
+name = "recueil-besoin-ps"
+compatibility_date = "2024-01-01"
+
+[site]
+bucket = "./dist"
