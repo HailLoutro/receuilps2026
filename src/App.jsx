@@ -1,48 +1,49 @@
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// APP.JSX — Routeur principal
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-import { Routes, Route, Navigate } from "react-router-dom";
-import { useApp } from "./context/AppContext";
+// ━━━ APP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AppProvider, useApp } from "./context/AppContext";
+import LoadingScreen from "./components/layout/LoadingScreen";
 import LoginPage from "./pages/LoginPage";
 import AdminPanel from "./pages/admin/AdminPanel";
 import ClientRecueil from "./pages/client/ClientRecueil";
-import LoadingScreen from "./components/layout/LoadingScreen";
+
+function ProtectedAdmin({ children }) {
+  const { ready, user } = useApp();
+  if (!ready) return <LoadingScreen />;
+  if (!user || user.type !== "admin") return <Navigate to="/admin/login" />;
+  return children;
+}
+
+function ProtectedClient({ children }) {
+  const { ready, user } = useApp();
+  if (!ready) return <LoadingScreen />;
+  if (!user || user.type !== "client") return <Navigate to="/client" />;
+  return children;
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      {/* Admin */}
+      <Route path="/admin/login" element={<LoginPage mode="admin" />} />
+      <Route path="/admin" element={<ProtectedAdmin><AdminPanel /></ProtectedAdmin>} />
+
+      {/* Client */}
+      <Route path="/client" element={<LoginPage mode="client" />} />
+      <Route path="/client/:slug" element={<LoginPage mode="client" />} />
+      <Route path="/client/app" element={<ProtectedClient><ClientRecueil /></ProtectedClient>} />
+
+      {/* Default */}
+      <Route path="*" element={<Navigate to="/admin/login" />} />
+    </Routes>
+  );
+}
 
 export default function App() {
-  const { ready, user } = useApp();
-
-  if (!ready) return <LoadingScreen />;
-
-  // Non authentifié → login
-  if (!user) {
-    return (
-      <Routes>
-        <Route path="/admin" element={<LoginPage mode="admin" />} />
-        <Route path="/client/:slug?" element={<LoginPage mode="client" />} />
-        <Route path="*" element={<Navigate to="/admin" replace />} />
-      </Routes>
-    );
-  }
-
-  // Authentifié → router selon le rôle
-  if (user.role === "admin") {
-    return (
-      <Routes>
-        <Route path="/admin/*" element={<AdminPanel />} />
-        <Route path="*" element={<Navigate to="/admin" replace />} />
-      </Routes>
-    );
-  }
-
-  if (user.role === "client") {
-    return (
-      <Routes>
-        <Route path="/client/*" element={<ClientRecueil />} />
-        <Route path="*" element={<Navigate to="/client" replace />} />
-      </Routes>
-    );
-  }
-
-  return <Navigate to="/admin" replace />;
+  return (
+    <BrowserRouter>
+      <AppProvider>
+        <AppRoutes />
+      </AppProvider>
+    </BrowserRouter>
+  );
 }

@@ -1,54 +1,31 @@
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// CONSTANTS — Branding, types de blocs, options
-// ➜ Modifier ici pour changer le branding ou ajouter des types
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+// ━━━ CONSTANTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 import {
   Type, FileText, Info, Image, Video, Table,
   Home, Shield, Settings, Users, Bell, Layers, Layout,
   FolderOpen, Database, Puzzle, BookOpen, Package,
 } from "lucide-react";
 
-// ── Branding ─────────────────────────────────────────────────
-
 export const BRAND = {
   name: "PeopleSpheres",
-  subtitle: "Recueil du besoin",
+  font: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap",
 };
-
-// ── Types de blocs disponibles dans l'éditeur ────────────────
 
 export const BLOCK_TYPES = [
-  { type: "heading", label: "Titre",  icon: Type,     desc: "Titre de section" },
-  { type: "text",    label: "Texte",  icon: FileText, desc: "Paragraphe libre" },
-  { type: "info",    label: "Info",   icon: Info,     desc: "Encart conseil / info" },
-  { type: "image",   label: "Image",  icon: Image,    desc: "Image avec URL" },
-  { type: "video",   label: "Vidéo",  icon: Video,    desc: "Vidéo embarquée" },
-  { type: "table",   label: "Tableau",icon: Table,    desc: "Tableau éditable" },
+  { type: "heading", label: "Titre", icon: Type, desc: "Titre de section" },
+  { type: "text", label: "Texte", icon: FileText, desc: "Paragraphe libre" },
+  { type: "info", label: "Info", icon: Info, desc: "Encart conseil" },
+  { type: "image", label: "Image", icon: Image, desc: "Image uploadée ou URL" },
+  { type: "video", label: "Vidéo", icon: Video, desc: "Vidéo embarquée" },
+  { type: "table", label: "Tableau", icon: Table, desc: "Tableau éditable" },
 ];
 
-// ── Types de colonnes pour les tableaux ──────────────────────
+export const COL_TYPES = ["text", "select", "check", "number"];
 
-export const TABLE_COL_TYPES = ["text", "select", "check", "number"];
-
-// ── Mapping icônes pour le sélecteur de pages ────────────────
-
-export const ICON_MAP = {
+// FIX #4: plus de groupes — juste les icônes
+export const ICONS = {
   Home, Shield, Settings, Users, FileText, Bell,
-  Layers, Layout, FolderOpen, Database, Puzzle, BookOpen,
-  Package, Table,
+  Layers, Layout, FolderOpen, Database, Puzzle, BookOpen, Package, Table,
 };
 
-// ── Variantes info box ───────────────────────────────────────
-
-export const INFO_VARIANTS = [
-  { value: "info",    label: "ℹ️ Info" },
-  { value: "tip",     label: "💡 Conseil" },
-  { value: "warning", label: "⚠️ Attention" },
-];
-
-// ── Helpers ──────────────────────────────────────────────────
-
-let _uid = 0;
-export const uid = (prefix = "id") =>
-  `${prefix}_${++_uid}_${Date.now().toString(36)}`;
+let _u = 0;
+export const uid = (p = "id") => `${p}_${++_u}_${Date.now().toString(36)}`;

@@ -1,101 +1,35 @@
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// TABLE BLOCK EDITOR — Config colonnes + données par défaut
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+// ━━━ TABLE BLOCK EDITOR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 import { Inp } from "../ui";
 import InlineTable from "./InlineTable";
 import { uid } from "../../config/constants";
 
 export default function TableBlockEditor({ content, onChange }) {
-  const c = content || {
-    title: "", columns: [], defaultRows: [],
-    allowAddRows: true, allowAddCols: false,
-  };
+  const c = content || { title: "", columns: [], defaultRows: [], allowAddRows: true, allowAddCols: false };
+  const up = (f, v) => onChange({ ...c, [f]: v });
 
-  const update = (field, value) => onChange({ ...c, [field]: value });
-
-  // ── Column operations ──────────────────────────────────────
-
-  const addCol = () => {
-    const key = `col_${uid("c")}`;
-    update("columns", [
-      ...(c.columns || []),
-      { key, label: "Nouvelle colonne", type: "text", minWidth: "140px", options: "" },
-    ]);
-  };
-
-  const updateCol = (ci, field, val) => {
-    const cols = [...(c.columns || [])];
-    cols[ci] = { ...cols[ci], [field]: val };
-    update("columns", cols);
-  };
-
-  const deleteCol = (ci) => {
-    update("columns", (c.columns || []).filter((_, i) => i !== ci));
-  };
-
-  // ── Row operations ─────────────────────────────────────────
-
-  const addRow = () => {
-    const row = { _id: uid("row") };
-    (c.columns || []).forEach((col) => { row[col.key] = ""; });
-    update("defaultRows", [...(c.defaultRows || []), row]);
-  };
-
-  const updateRow = (ri, key, val) => {
-    const rows = [...(c.defaultRows || [])];
-    rows[ri] = { ...rows[ri], [key]: val };
-    update("defaultRows", rows);
-  };
-
-  const deleteRow = (ri) => {
-    update("defaultRows", (c.defaultRows || []).filter((_, i) => i !== ri));
-  };
-
-  // ── Render ─────────────────────────────────────────────────
+  const addC = () => up("columns", [...(c.columns || []), { key: `c_${uid()}`, label: "Nouvelle col.", type: "text", minWidth: "140px", options: "" }]);
+  const upC = (i, f, v) => { const cols = [...(c.columns || [])]; cols[i] = { ...cols[i], [f]: v }; up("columns", cols); };
+  const delC = i => up("columns", (c.columns || []).filter((_, j) => j !== i));
+  const addR = () => { const r = { _id: uid("r") }; (c.columns || []).forEach(col => { r[col.key] = ""; }); up("defaultRows", [...(c.defaultRows || []), r]); };
+  const upR = (i, k, v) => { const rows = [...(c.defaultRows || [])]; rows[i] = { ...rows[i], [k]: v }; up("defaultRows", rows); };
+  const delR = i => up("defaultRows", (c.defaultRows || []).filter((_, j) => j !== i));
 
   return (
     <div className="space-y-4">
-      <Inp label="Titre du tableau" value={c.title} onChange={(v) => update("title", v)} placeholder="ex: Formulaires standards" />
-
+      <Inp label="Titre du tableau" value={c.title} onChange={v => up("title", v)} ph="ex: Formulaires standards" />
       <div className="flex gap-4">
         <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={c.allowAddRows !== false}
-            onChange={(e) => update("allowAddRows", e.target.checked)}
-            className="rounded"
-          />
-          Client peut ajouter des lignes
+          <input type="checkbox" checked={c.allowAddRows !== false} onChange={e => up("allowAddRows", e.target.checked)} className="rounded" /> Client : ajouter lignes
         </label>
         <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={c.allowAddCols === true}
-            onChange={(e) => update("allowAddCols", e.target.checked)}
-            className="rounded"
-          />
-          Client peut ajouter des colonnes
+          <input type="checkbox" checked={c.allowAddCols === true} onChange={e => up("allowAddCols", e.target.checked)} className="rounded" /> Client : ajouter colonnes
         </label>
       </div>
-
-      <div>
-        <label className="block text-sm font-semibold text-slate-700 mb-2">
-          Colonnes & données par défaut
-        </label>
-        <InlineTable
-          columns={c.columns || []}
-          rows={c.defaultRows || []}
-          onUR={updateRow}
-          onAR={addRow}
-          onDR={deleteRow}
-          onUC={updateCol}
-          onAC={addCol}
-          onDC={deleteCol}
-          admin
-          edit
-        />
+      {/* FIX #3: hint about subtitle */}
+      <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded-lg">
+        💡 Dans les cellules texte, le client peut taper Entrée pour séparer le texte principal d'un sous-texte affiché en italique.
       </div>
+      <InlineTable columns={c.columns || []} rows={c.defaultRows || []} onUR={upR} onAR={addR} onDR={delR} onUC={upC} onAC={addC} onDC={delC} admin edit />
     </div>
   );
 }

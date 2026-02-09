@@ -1,89 +1,98 @@
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// DATABASE SERVICE — Firestore CRUD
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ━━━ DATABASE SERVICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Firestore CRUD + cache mémoire
 //
-// Structure Firestore :
-//
-//   users/{uid}                  → profil (role, name, slug, createdAt)
-//   template/current             → le template global (pages + blocks)
-//   clients/{slug}               → métadonnées client (name, slug, createdAt)
-//   clients/{slug}/data/recueil  → réponses du client au recueil
-//
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Structure :
+//   template/current           → template global
+//   clients/{slug}             → { name, slug, username, password, createdAt }
+//   clients/{slug}/data/recueil → réponses client
+//   backups/{id}               → sauvegardes template (FIX #5)
 
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc,
-  collection, getDocs, query, orderBy, onSnapshot,
+  doc, getDoc, setDoc, deleteDoc,
+  collection, getDocs, query, orderBy,
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 
-// ── Template (global, partagé par tous les clients) ──────────
+const cache = {};
+
+// ── Template ─────────────────────────────────────────────────
 
 export async function getTemplate() {
+  if (cache.template) return cache.template;
   const snap = await getDoc(doc(db, "template", "current"));
-  return snap.exists() ? snap.data() : null;
+  const val = snap.exists() ? snap.data() : null;
+  cache.template = val;
+  return val;
 }
 
-export async function saveTemplate(templateData) {
+export async function saveTemplate(data) {
+  cache.template = data;
   await setDoc(doc(db, "template", "current"), {
-    ...templateData,
+    ...data,
     updatedAt: new Date().toISOString(),
   });
 }
 
-/** Écoute en temps réel les changements du template */
-export function onTemplateChange(callback) {
-  return onSnapshot(doc(db, "template", "current"), (snap) => {
-    callback(snap.exists() ? snap.data() : null);
-  });
-}
-
-// ── Clients ──────────────────────────────────────────────────
+// ── Clients (FIX #2: credentials dans Firestore) ────────────
 
 export async function getClients() {
   const snap = await getDocs(
     query(collection(db, "clients"), orderBy("createdAt", "desc"))
   );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  cache.clients = list;
+  return list;
 }
 
-export async function createClient({ slug, name, createdAt }) {
-  await setDoc(doc(db, "clients", slug), { name, slug, createdAt });
+export async function createClient({ name, slug, username, password }) {
+  const data = { name, slug, username, password, createdAt: new Date().toISOString() };
+  await setDoc(doc(db, "clients", slug), data);
+  delete cache.clients;
 }
 
 export async function deleteClient(slug) {
-  // Supprimer les données du client
   await deleteDoc(doc(db, "clients", slug, "data", "recueil"));
-  // Supprimer le client
   await deleteDoc(doc(db, "clients", slug));
+  delete cache.clients;
 }
 
-// ── Données client (réponses au recueil) ─────────────────────
+// ── Client Data ──────────────────────────────────────────────
 
 export async function getClientData(slug) {
+  const key = `cdata-${slug}`;
+  if (cache[key]) return cache[key];
   const snap = await getDoc(doc(db, "clients", slug, "data", "recueil"));
-  return snap.exists() ? snap.data() : {};
+  const val = snap.exists() ? snap.data() : {};
+  cache[key] = val;
+  return val;
 }
 
 export async function saveClientData(slug, data) {
+  cache[`cdata-${slug}`] = data;
   await setDoc(doc(db, "clients", slug, "data", "recueil"), {
     ...data,
     updatedAt: new Date().toISOString(),
   });
 }
 
-/** Écoute en temps réel les données d'un client */
-export function onClientDataChange(slug, callback) {
-  return onSnapshot(doc(db, "clients", slug, "data", "recueil"), (snap) => {
-    callback(snap.exists() ? snap.data() : {});
-  });
+// ── Backups (FIX #5) ─────────────────────────────────────────
+
+export async function getBackups() {
+  try {
+    const snap = await getDoc(doc(db, "meta", "backups"));
+    return snap.exists() ? snap.data().list || [] : [];
+  } catch { return []; }
 }
 
-// ── Admins (liste depuis collection users) ───────────────────
+export async function saveBackups(list) {
+  await setDoc(doc(db, "meta", "backups"), { list });
+}
+
+// ── Admins ───────────────────────────────────────────────────
 
 export async function getAdmins() {
   const snap = await getDocs(collection(db, "users"));
   return snap.docs
-    .map((d) => ({ uid: d.id, ...d.data() }))
-    .filter((u) => u.role === "admin");
+    .map(d => ({ uid: d.id, ...d.data() }))
+    .filter(u => u.role === "admin");
 }
