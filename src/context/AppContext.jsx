@@ -22,8 +22,10 @@ export function AppProvider({ children }) {
   const [cData, setCData] = useState({});
   const [saving, setSaving] = useState(false);
   const [backups, setBackups] = useState([]);
+  // Flag pour éviter que onAuthChange écrase le state pendant loginClient
+  const loginInProgress = useRef(false);
 
-  // ── Init : charge le template TOUJOURS (admin OU client) ──
+  // ── Init ───────────────────────────────────────────────────
   useEffect(() => {
     const loadTemplate = async () => {
       let t = await DB.getTemplate();
@@ -31,28 +33,37 @@ export function AppProvider({ children }) {
       setTemplate(t);
     };
 
-    Auth.onAuthChange(async adminUser => {
-      if (adminUser && adminUser.role === "admin") {
-        setUser({ type: "admin", ...adminUser });
+    Auth.onAuthChange(async (authUser) => {
+      // Ne pas interférer si un login client est en cours
+      if (loginInProgress.current) return;
+
+      if (authUser && authUser.role === "admin") {
+        setUser({ type: "admin", ...authUser });
         await loadTemplate();
         setClients(await DB.getClients());
         setBackups(await DB.getBackups());
+      } else if (authUser && authUser.role === "client") {
+        // Session client restaurée (ex: refresh page)
+        setUser({ type: "client", ...authUser });
+        await loadTemplate();
+        const d = await DB.getClientData(authUser.slug);
+        setCData(d);
       } else {
-        // Pas d'admin → charge quand même le template (pour le client)
+        // Pas de session valide (ou anonymous sans profil = en cours de login)
         await loadTemplate();
       }
       setReady(true);
     });
   }, []);
 
-  // ── Template save (debounced) ───────────────────────────────
+  // ── Template save (debounced) ──────────────────────────────
   const _saveT = useCallback(async t => {
     setSaving(true); await DB.saveTemplate(t); setSaving(false);
   }, []);
   const dbSaveT = useDebounce(_saveT, 600);
   const sT = t => { setTemplate(t); dbSaveT(t); };
 
-  // ── Client data save (debounced) ────────────────────────────
+  // ── Client data save (debounced) ───────────────────────────
   const _saveCD = useCallback(async (slug, d) => {
     setSaving(true); await DB.saveClientData(slug, d); setSaving(false);
   }, []);
@@ -67,17 +78,29 @@ export function AppProvider({ children }) {
     return d;
   };
 
-  // ── Client login : query Firestore directement ─────────────
-  // Ne dépend PAS du state clients — requête Firestore à chaque appel
+  // ── Client login ───────────────────────────────────────────
+  // Séquence : anonymous auth → lire doc → vérifier mdp → écrire profil → set user
   const loginClient = async (slug, username, password) => {
+    loginInProgress.current = true;
     try {
       const client = await Auth.loginClient(slug, username, password);
-      if (!client) return false;
+      if (!client) {
+        loginInProgress.current = false;
+        return false;
+      }
+      // Charger le template et les données client
+      let t = await DB.getTemplate();
+      if (!t) { t = buildDefaultTemplate(); await DB.saveTemplate(t); }
+      setTemplate(t);
+      const d = await DB.getClientData(client.slug);
+      setCData(d);
+      // Setter le user EN DERNIER pour que la navigation fonctionne
       setUser(client);
-      await lCD(client.slug);
+      loginInProgress.current = false;
       return true;
     } catch (err) {
       console.error("loginClient error:", err);
+      loginInProgress.current = false;
       return false;
     }
   };
@@ -99,8 +122,9 @@ export function AppProvider({ children }) {
     setTemplate(b.template); await DB.saveTemplate(b.template);
   };
 
+  // ── Logout ─────────────────────────────────────────────────
   const logout = async () => {
-    if (user?.type === "admin") await Auth.logoutUser();
+    await Auth.logoutUser();
     setUser(null); setCData({});
   };
 

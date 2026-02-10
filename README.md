@@ -88,7 +88,8 @@ src/
 
 1. Créer un projet sur [console.firebase.google.com](https://console.firebase.google.com)
 2. Activer **Authentication** → Email/Password
-3. Activer **Cloud Firestore** (mode production)
+3. Activer **Authentication** → Anonymous (⚠️ requis pour la connexion client)
+4. Activer **Cloud Firestore** (mode production)
 4. Copier la config dans `.env` (voir `.env.example`)
 5. Déployer les règles : `firebase deploy --only firestore:rules`
 

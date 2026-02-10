@@ -1,12 +1,4 @@
 // ━━━ DATABASE SERVICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Firestore CRUD + cache mémoire
-//
-// Structure :
-//   template/current           → template global
-//   clients/{slug}             → { name, slug, username, password, createdAt }
-//   clients/{slug}/data/recueil → réponses client
-//   backups/{id}               → sauvegardes template (FIX #5)
-
 import {
   doc, getDoc, setDoc, deleteDoc,
   collection, getDocs, query, orderBy,
@@ -19,10 +11,15 @@ const cache = {};
 
 export async function getTemplate() {
   if (cache.template) return cache.template;
-  const snap = await getDoc(doc(db, "template", "current"));
-  const val = snap.exists() ? snap.data() : null;
-  cache.template = val;
-  return val;
+  try {
+    const snap = await getDoc(doc(db, "template", "current"));
+    const val = snap.exists() ? snap.data() : null;
+    cache.template = val;
+    return val;
+  } catch (err) {
+    console.warn("getTemplate error:", err);
+    return null;
+  }
 }
 
 export async function saveTemplate(data) {
@@ -33,15 +30,18 @@ export async function saveTemplate(data) {
   });
 }
 
-// ── Clients (FIX #2: credentials dans Firestore) ────────────
+// ── Clients ──────────────────────────────────────────────────
 
 export async function getClients() {
-  const snap = await getDocs(
-    query(collection(db, "clients"), orderBy("createdAt", "desc"))
-  );
-  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  cache.clients = list;
-  return list;
+  try {
+    const snap = await getDocs(collection(db, "clients"));
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    cache.clients = list;
+    return list;
+  } catch (err) {
+    console.warn("getClients error:", err);
+    return cache.clients || [];
+  }
 }
 
 export async function createClient({ name, slug, username, password }) {
@@ -51,7 +51,16 @@ export async function createClient({ name, slug, username, password }) {
 }
 
 export async function deleteClient(slug) {
-  await deleteDoc(doc(db, "clients", slug, "data", "recueil"));
+  // Supprimer les données client d'abord (subcollection)
+  // try/catch car le doc peut ne pas exister
+  try {
+    await deleteDoc(doc(db, "clients", slug, "data", "recueil"));
+  } catch (err) {
+    console.warn("deleteClient data cleanup:", err.message);
+    // Pas grave, on continue
+  }
+
+  // Supprimer le document client principal
   await deleteDoc(doc(db, "clients", slug));
   delete cache.clients;
 }
@@ -61,10 +70,15 @@ export async function deleteClient(slug) {
 export async function getClientData(slug) {
   const key = `cdata-${slug}`;
   if (cache[key]) return cache[key];
-  const snap = await getDoc(doc(db, "clients", slug, "data", "recueil"));
-  const val = snap.exists() ? snap.data() : {};
-  cache[key] = val;
-  return val;
+  try {
+    const snap = await getDoc(doc(db, "clients", slug, "data", "recueil"));
+    const val = snap.exists() ? snap.data() : {};
+    cache[key] = val;
+    return val;
+  } catch (err) {
+    console.warn("getClientData error:", err);
+    return {};
+  }
 }
 
 export async function saveClientData(slug, data) {
@@ -75,13 +89,16 @@ export async function saveClientData(slug, data) {
   });
 }
 
-// ── Backups (FIX #5) ─────────────────────────────────────────
+// ── Backups ──────────────────────────────────────────────────
 
 export async function getBackups() {
   try {
     const snap = await getDoc(doc(db, "meta", "backups"));
-    return snap.exists() ? snap.data().list || [] : [];
-  } catch { return []; }
+    return snap.exists() ? (snap.data().list || []) : [];
+  } catch (err) {
+    console.warn("getBackups error:", err);
+    return [];
+  }
 }
 
 export async function saveBackups(list) {
@@ -91,8 +108,13 @@ export async function saveBackups(list) {
 // ── Admins ───────────────────────────────────────────────────
 
 export async function getAdmins() {
-  const snap = await getDocs(collection(db, "users"));
-  return snap.docs
-    .map(d => ({ uid: d.id, ...d.data() }))
-    .filter(u => u.role === "admin");
+  try {
+    const snap = await getDocs(collection(db, "users"));
+    return snap.docs
+      .map(d => ({ uid: d.id, ...d.data() }))
+      .filter(u => u.role === "admin");
+  } catch (err) {
+    console.warn("getAdmins error:", err);
+    return [];
+  }
 }

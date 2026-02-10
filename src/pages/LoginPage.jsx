@@ -18,7 +18,7 @@ export default function LoginPage({ mode = "admin" }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ── Navigation APRÈS que le state user soit commité ─────────
+  // Naviguer APRÈS que le state user soit commité par React
   useEffect(() => {
     if (user?.type === "admin") navigate("/admin", { replace: true });
     if (user?.type === "client") navigate("/recueil", { replace: true });
@@ -30,14 +30,19 @@ export default function LoginPage({ mode = "admin" }) {
     try {
       if (mode === "admin") {
         await loginAdmin(email, password);
-        // onAuthChange dans AppContext va setter user → useEffect navigate
+        // → onAuthChange dans AppContext va setter user → useEffect navigue
       } else {
         if (!slug) { setError("Code client requis"); setLoading(false); return; }
         const ok = await loginClient(slug, email, password);
-        if (!ok) { setError("Identifiants incorrects"); setLoading(false); return; }
-        // loginClient a setté user → useEffect navigate
+        if (!ok) {
+          setError("Identifiants incorrects");
+          setLoading(false);
+          return;
+        }
+        // → loginClient a setté user → useEffect navigue
       }
-    } catch {
+    } catch (err) {
+      console.error("Login error:", err);
       setError("Identifiants incorrects");
     }
     setLoading(false);
@@ -63,9 +68,13 @@ export default function LoginPage({ mode = "admin" }) {
           {mode === "client" && !paramSlug && (
             <Inp label="Code client" value={slug} onChange={setSlug} ph="ex: acme-corp" />
           )}
-          <Inp label={mode === "admin" ? "Email" : "Identifiant"} value={email} onChange={setEmail}
-            ph={mode === "admin" ? "admin@entreprise.com" : "Votre identifiant"} />
-          <Inp label="Mot de passe" value={password} onChange={setPassword} type="password" ph="••••••••"
+          <Inp
+            label={mode === "admin" ? "Email" : "Identifiant"}
+            value={email} onChange={setEmail}
+            ph={mode === "admin" ? "admin@entreprise.com" : "Votre identifiant"}
+          />
+          <Inp label="Mot de passe" value={password} onChange={setPassword}
+            type="password" ph="••••••••"
             onKeyDown={e => e.key === "Enter" && go()} />
           {error && (
             <div className="flex items-center gap-2 text-sm text-rose-600 bg-rose-50 p-3 rounded-xl">

@@ -1,6 +1,4 @@
 // ━━━ ADMIN CLIENTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// FIX #1: sC/refreshClients ne touche PAS le user courant
-// FIX #2: clients stockés dans Firestore (pas Firebase Auth)
 import { useState } from "react";
 import { Users, UserPlus, Plus, Trash2, Copy, Search, CheckCircle2 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
@@ -13,36 +11,51 @@ export default function AdminClients() {
   const [nc, setNc] = useState({ name: "", slug: "", username: "", password: "" });
   const [q, setQ] = useState("");
   const [copied, setCopied] = useState(null);
-  const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const create = async () => {
     if (!nc.name || !nc.slug || !nc.username || !nc.password) return;
     if (clients.find(c => c.slug === nc.slug)) { alert("Ce slug existe déjà"); return; }
-    setCreating(true);
+    setBusy(true);
     try {
       await createClient(nc);
       await refreshClients();
       setNc({ name: "", slug: "", username: "", password: "" });
       setShow(false);
     } catch (err) {
-      alert(`Erreur : ${err.message}`);
+      alert(`Erreur création : ${err.message}`);
     }
-    setCreating(false);
+    setBusy(false);
   };
 
   const del = async slug => {
     if (!confirm("Supprimer ce client et toutes ses données ?")) return;
-    await deleteClient(slug);
-    await refreshClients();
+    setBusy(true);
+    try {
+      await deleteClient(slug);
+      await refreshClients();
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert(`Erreur suppression : ${err.message}`);
+    }
+    setBusy(false);
   };
 
   const copyCredentials = c => {
-    navigator.clipboard.writeText(`URL: /client/${c.slug}\nLogin: ${c.username}\nMot de passe: ${c.password}`);
-    setCopied(c.id); setTimeout(() => setCopied(null), 2000);
+    const text = [
+      `Client : ${c.name}`,
+      `URL : ${window.location.origin}/client/${c.slug}`,
+      `Identifiant : ${c.username}`,
+      `Mot de passe : ${c.password}`,
+    ].join("\n");
+    navigator.clipboard.writeText(text);
+    setCopied(c.slug);
+    setTimeout(() => setCopied(null), 2000);
   };
 
   const filtered = clients.filter(c =>
-    c.name.toLowerCase().includes(q.toLowerCase()) || c.slug.includes(q.toLowerCase())
+    c.name.toLowerCase().includes(q.toLowerCase()) ||
+    c.slug.includes(q.toLowerCase())
   );
 
   return (
@@ -84,11 +97,12 @@ export default function AdminClients() {
               </div>
               <div className="flex items-center gap-2">
                 <Btn v="ghost" s="sm" onClick={() => copyCredentials(c)}>
-                  {copied === c.id
+                  {copied === c.slug
                     ? <><CheckCircle2 size={14} className="text-emerald-500" /> Copié</>
                     : <><Copy size={14} /> Identifiants</>}
                 </Btn>
-                <Btn v="ghost" s="sm" onClick={() => del(c.slug)} className="text-rose-500 hover:bg-rose-50">
+                <Btn v="ghost" s="sm" onClick={() => del(c.slug)} disabled={busy}
+                  className="text-rose-500 hover:bg-rose-50">
                   <Trash2 size={14} />
                 </Btn>
               </div>
@@ -100,14 +114,22 @@ export default function AdminClients() {
       <Modal open={show} onClose={() => setShow(false)} title="Nouveau client">
         <div className="space-y-4">
           <Inp label="Nom de l'entreprise" value={nc.name}
-            onChange={v => setNc({ ...nc, name: v, slug: v.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") })}
+            onChange={v => setNc({
+              ...nc, name: v,
+              slug: v.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+            })}
             ph="Acme Corp" />
-          <Inp label="Slug (identifiant URL)" value={nc.slug} onChange={v => setNc({ ...nc, slug: v })} ph="acme-corp" />
+          <Inp label="Slug (identifiant URL)" value={nc.slug}
+            onChange={v => setNc({ ...nc, slug: v })} ph="acme-corp" />
           <div className="grid grid-cols-2 gap-4">
-            <Inp label="Login client" value={nc.username} onChange={v => setNc({ ...nc, username: v })} ph="acme-admin" />
-            <Inp label="Mot de passe" value={nc.password} onChange={v => setNc({ ...nc, password: v })} ph="••••••" />
+            <Inp label="Login client" value={nc.username}
+              onChange={v => setNc({ ...nc, username: v })} ph="acme-admin" />
+            <Inp label="Mot de passe" value={nc.password}
+              onChange={v => setNc({ ...nc, password: v })} ph="••••••" />
           </div>
-          <Btn onClick={create} disabled={creating} className="w-full">{creating ? "Création..." : "Créer le client"}</Btn>
+          <Btn onClick={create} disabled={busy} className="w-full">
+            {busy ? "Création..." : "Créer le client"}
+          </Btn>
         </div>
       </Modal>
     </div>
