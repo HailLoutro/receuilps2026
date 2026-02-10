@@ -1,6 +1,8 @@
 // ━━━ ADMIN CLIENTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// L'admin crée un client = simple écriture Firestore.
+// Le compte Firebase Auth sera créé automatiquement au premier login client.
 import { useState } from "react";
-import { Users, UserPlus, Plus, Trash2, Copy, Search, CheckCircle2 } from "lucide-react";
+import { Users, UserPlus, Plus, Trash2, Copy, Search, CheckCircle2, Info } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { createClient, deleteClient } from "../../services/database";
 import { Btn, Inp, Card, Modal, Empty } from "../../components/ui";
@@ -16,6 +18,7 @@ export default function AdminClients() {
   const create = async () => {
     if (!nc.name || !nc.slug || !nc.username || !nc.password) return;
     if (clients.find(c => c.slug === nc.slug)) { alert("Ce slug existe déjà"); return; }
+    if (nc.password.length < 6) { alert("Le mot de passe doit faire au moins 6 caractères (requis par Firebase)"); return; }
     setBusy(true);
     try {
       await createClient(nc);
@@ -23,19 +26,18 @@ export default function AdminClients() {
       setNc({ name: "", slug: "", username: "", password: "" });
       setShow(false);
     } catch (err) {
-      alert(`Erreur création : ${err.message}`);
+      alert(`Erreur : ${err.message}`);
     }
     setBusy(false);
   };
 
   const del = async slug => {
-    if (!confirm("Supprimer ce client et toutes ses données ?")) return;
+    if (!confirm(`Supprimer le client "${slug}" et toutes ses données ?`)) return;
     setBusy(true);
     try {
       await deleteClient(slug);
       await refreshClients();
     } catch (err) {
-      console.error("Delete error:", err);
       alert(`Erreur suppression : ${err.message}`);
     }
     setBusy(false);
@@ -43,8 +45,9 @@ export default function AdminClients() {
 
   const copyCredentials = c => {
     const text = [
-      `Client : ${c.name}`,
-      `URL : ${window.location.origin}/client/${c.slug}`,
+      `═══ Identifiants ${c.name} ═══`,
+      `URL de connexion : ${window.location.origin}/client/${c.slug}`,
+      `Code client : ${c.slug}`,
       `Identifiant : ${c.username}`,
       `Mot de passe : ${c.password}`,
     ].join("\n");
@@ -101,8 +104,7 @@ export default function AdminClients() {
                     ? <><CheckCircle2 size={14} className="text-emerald-500" /> Copié</>
                     : <><Copy size={14} /> Identifiants</>}
                 </Btn>
-                <Btn v="ghost" s="sm" onClick={() => del(c.slug)} disabled={busy}
-                  className="text-rose-500 hover:bg-rose-50">
+                <Btn v="danger" s="sm" onClick={() => del(c.slug)} disabled={busy}>
                   <Trash2 size={14} />
                 </Btn>
               </div>
@@ -119,15 +121,28 @@ export default function AdminClients() {
               slug: v.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
             })}
             ph="Acme Corp" />
-          <Inp label="Slug (identifiant URL)" value={nc.slug}
+          <Inp label="Slug (code client pour la connexion)" value={nc.slug}
             onChange={v => setNc({ ...nc, slug: v })} ph="acme-corp" />
           <div className="grid grid-cols-2 gap-4">
             <Inp label="Login client" value={nc.username}
-              onChange={v => setNc({ ...nc, username: v })} ph="acme-admin" />
-            <Inp label="Mot de passe" value={nc.password}
-              onChange={v => setNc({ ...nc, password: v })} ph="••••••" />
+              onChange={v => setNc({ ...nc, username: v })} ph="jean.dupont" />
+            <Inp label="Mot de passe (min. 6 car.)" value={nc.password}
+              onChange={v => setNc({ ...nc, password: v })} ph="motdepasse" />
           </div>
-          <Btn onClick={create} disabled={busy} className="w-full">
+
+          <div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800 space-y-1">
+            <div className="flex items-center gap-2 font-semibold"><Info size={14} /> Le client se connectera avec :</div>
+            <div className="ml-5 font-mono text-xs space-y-0.5">
+              <div>Code client : <strong>{nc.slug || "..."}</strong></div>
+              <div>Identifiant : <strong>{nc.username || "..."}</strong></div>
+              <div>Mot de passe : <strong>{nc.password || "..."}</strong></div>
+            </div>
+            <div className="ml-5 mt-2 text-xs text-blue-600">
+              URL directe : {window.location.origin}/client/{nc.slug || "..."}
+            </div>
+          </div>
+
+          <Btn onClick={create} disabled={busy || nc.password.length < 6} className="w-full">
             {busy ? "Création..." : "Créer le client"}
           </Btn>
         </div>

@@ -23,18 +23,14 @@ function ProtectedClient({ children }) {
 function AppRoutes() {
   return (
     <Routes>
-      {/* Admin */}
       <Route path="/admin/login" element={<LoginPage mode="admin" />} />
       <Route path="/admin" element={<ProtectedAdmin><AdminPanel /></ProtectedAdmin>} />
 
-      {/* Client login */}
       <Route path="/client" element={<LoginPage mode="client" />} />
       <Route path="/client/:slug" element={<LoginPage mode="client" />} />
 
-      {/* Client app (route séparée, aucun conflit) */}
       <Route path="/recueil" element={<ProtectedClient><ClientRecueil /></ProtectedClient>} />
 
-      {/* Default */}
       <Route path="*" element={<Navigate to="/admin/login" replace />} />
     </Routes>
   );

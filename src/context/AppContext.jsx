@@ -22,55 +22,52 @@ export function AppProvider({ children }) {
   const [cData, setCData] = useState({});
   const [saving, setSaving] = useState(false);
   const [backups, setBackups] = useState([]);
-  // Flag pour éviter que onAuthChange écrase le state pendant loginClient
-  const loginInProgress = useRef(false);
+  const loginBusy = useRef(false);
 
   // ── Init ───────────────────────────────────────────────────
   useEffect(() => {
-    const loadTemplate = async () => {
+    Auth.onAuthChange(async (authUser) => {
+      // Ne pas interférer si loginClient est en cours
+      if (loginBusy.current) return;
+
+      // Charger le template dans tous les cas
       let t = await DB.getTemplate();
       if (!t) { t = buildDefaultTemplate(); await DB.saveTemplate(t); }
       setTemplate(t);
-    };
-
-    Auth.onAuthChange(async (authUser) => {
-      // Ne pas interférer si un login client est en cours
-      if (loginInProgress.current) return;
 
       if (authUser && authUser.role === "admin") {
         setUser({ type: "admin", ...authUser });
-        await loadTemplate();
         setClients(await DB.getClients());
         setBackups(await DB.getBackups());
       } else if (authUser && authUser.role === "client") {
-        // Session client restaurée (ex: refresh page)
+        // Session client restaurée (refresh page)
         setUser({ type: "client", ...authUser });
-        await loadTemplate();
         const d = await DB.getClientData(authUser.slug);
         setCData(d);
       } else {
-        // Pas de session valide (ou anonymous sans profil = en cours de login)
-        await loadTemplate();
+        // Pas de session valide
+        setUser(null);
       }
+
       setReady(true);
     });
   }, []);
 
   // ── Template save (debounced) ──────────────────────────────
-  const _saveT = useCallback(async t => {
+  const _sT = useCallback(async t => {
     setSaving(true); await DB.saveTemplate(t); setSaving(false);
   }, []);
-  const dbSaveT = useDebounce(_saveT, 600);
-  const sT = t => { setTemplate(t); dbSaveT(t); };
+  const dbST = useDebounce(_sT, 600);
+  const sT = t => { setTemplate(t); dbST(t); };
 
   // ── Client data save (debounced) ───────────────────────────
-  const _saveCD = useCallback(async (slug, d) => {
+  const _sCD = useCallback(async (slug, d) => {
     setSaving(true); await DB.saveClientData(slug, d); setSaving(false);
   }, []);
-  const dbSaveCD = useDebounce((slug, d) => _saveCD(slug, d), 600);
-  const sCD = (slug, d) => { setCData(d); dbSaveCD(slug, d); };
+  const dbSCD = useDebounce((s, d) => _sCD(s, d), 600);
+  const sCD = (slug, d) => { setCData(d); dbSCD(slug, d); };
 
-  const refreshClients = async () => { setClients(await DB.getClients()); };
+  const refreshClients = async () => setClients(await DB.getClients());
 
   const lCD = async slug => {
     const d = await DB.getClientData(slug);
@@ -79,28 +76,26 @@ export function AppProvider({ children }) {
   };
 
   // ── Client login ───────────────────────────────────────────
-  // Séquence : anonymous auth → lire doc → vérifier mdp → écrire profil → set user
   const loginClient = async (slug, username, password) => {
-    loginInProgress.current = true;
+    loginBusy.current = true;
     try {
       const client = await Auth.loginClient(slug, username, password);
-      if (!client) {
-        loginInProgress.current = false;
-        return false;
-      }
-      // Charger le template et les données client
+      if (!client) { loginBusy.current = false; return false; }
+
+      // Charger template + données
       let t = await DB.getTemplate();
       if (!t) { t = buildDefaultTemplate(); await DB.saveTemplate(t); }
       setTemplate(t);
       const d = await DB.getClientData(client.slug);
       setCData(d);
-      // Setter le user EN DERNIER pour que la navigation fonctionne
+
+      // Setter le user en dernier (déclenche la navigation)
       setUser(client);
-      loginInProgress.current = false;
+      loginBusy.current = false;
       return true;
     } catch (err) {
-      console.error("loginClient error:", err);
-      loginInProgress.current = false;
+      console.error("loginClient ctx error:", err);
+      loginBusy.current = false;
       return false;
     }
   };

@@ -1,7 +1,7 @@
 // ━━━ DATABASE SERVICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 import {
   doc, getDoc, setDoc, deleteDoc,
-  collection, getDocs, query, orderBy,
+  collection, getDocs,
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 
@@ -17,7 +17,7 @@ export async function getTemplate() {
     cache.template = val;
     return val;
   } catch (err) {
-    console.warn("getTemplate error:", err);
+    console.warn("getTemplate:", err);
     return null;
   }
 }
@@ -31,6 +31,8 @@ export async function saveTemplate(data) {
 }
 
 // ── Clients ──────────────────────────────────────────────────
+// L'admin écrit UNIQUEMENT dans Firestore.
+// Le compte Firebase Auth est créé automatiquement au premier login client.
 
 export async function getClients() {
   try {
@@ -39,30 +41,38 @@ export async function getClients() {
     cache.clients = list;
     return list;
   } catch (err) {
-    console.warn("getClients error:", err);
+    console.warn("getClients:", err);
     return cache.clients || [];
   }
 }
 
 export async function createClient({ name, slug, username, password }) {
-  const data = { name, slug, username, password, createdAt: new Date().toISOString() };
-  await setDoc(doc(db, "clients", slug), data);
+  // Juste écrire dans Firestore — PAS de Firebase Auth ici
+  await setDoc(doc(db, "clients", slug), {
+    name,
+    slug,
+    username,
+    password,
+    createdAt: new Date().toISOString(),
+  });
   delete cache.clients;
 }
 
 export async function deleteClient(slug) {
-  // Supprimer les données client d'abord (subcollection)
-  // try/catch car le doc peut ne pas exister
+  // 1. Supprimer les données (subcollection)
   try {
     await deleteDoc(doc(db, "clients", slug, "data", "recueil"));
   } catch (err) {
-    console.warn("deleteClient data cleanup:", err.message);
-    // Pas grave, on continue
+    console.warn("deleteClient data:", err.message);
   }
 
-  // Supprimer le document client principal
+  // 2. Supprimer le doc client
   await deleteDoc(doc(db, "clients", slug));
   delete cache.clients;
+
+  // Note: le compte Firebase Auth {slug}@client.ps reste orphelin.
+  // Il sera nettoyé manuellement ou via Cloud Function.
+  // Ça n'empêche rien de fonctionner.
 }
 
 // ── Client Data ──────────────────────────────────────────────
@@ -76,7 +86,7 @@ export async function getClientData(slug) {
     cache[key] = val;
     return val;
   } catch (err) {
-    console.warn("getClientData error:", err);
+    console.warn("getClientData:", err);
     return {};
   }
 }
@@ -95,10 +105,7 @@ export async function getBackups() {
   try {
     const snap = await getDoc(doc(db, "meta", "backups"));
     return snap.exists() ? (snap.data().list || []) : [];
-  } catch (err) {
-    console.warn("getBackups error:", err);
-    return [];
-  }
+  } catch { return []; }
 }
 
 export async function saveBackups(list) {
@@ -113,8 +120,5 @@ export async function getAdmins() {
     return snap.docs
       .map(d => ({ uid: d.id, ...d.data() }))
       .filter(u => u.role === "admin");
-  } catch (err) {
-    console.warn("getAdmins error:", err);
-    return [];
-  }
+  } catch { return []; }
 }

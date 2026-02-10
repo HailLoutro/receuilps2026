@@ -18,7 +18,7 @@ export default function LoginPage({ mode = "admin" }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Naviguer APRÈS que le state user soit commité par React
+  // Naviguer quand user est set
   useEffect(() => {
     if (user?.type === "admin") navigate("/admin", { replace: true });
     if (user?.type === "client") navigate("/recueil", { replace: true });
@@ -30,12 +30,16 @@ export default function LoginPage({ mode = "admin" }) {
     try {
       if (mode === "admin") {
         await loginAdmin(email, password);
-        // → onAuthChange dans AppContext va setter user → useEffect navigue
+        // → onAuthChange va setter user → useEffect navigue
       } else {
-        if (!slug) { setError("Code client requis"); setLoading(false); return; }
-        const ok = await loginClient(slug, email, password);
+        if (!slug.trim()) {
+          setError("Entrez le code client (slug)");
+          setLoading(false);
+          return;
+        }
+        const ok = await loginClient(slug.trim().toLowerCase(), email.trim(), password);
         if (!ok) {
-          setError("Identifiants incorrects");
+          setError("Code client, identifiant ou mot de passe incorrect. Vérifiez les 3 champs.");
           setLoading(false);
           return;
         }
@@ -43,7 +47,7 @@ export default function LoginPage({ mode = "admin" }) {
       }
     } catch (err) {
       console.error("Login error:", err);
-      setError("Identifiants incorrects");
+      setError(err.message || "Identifiants incorrects");
     }
     setLoading(false);
   };
@@ -62,23 +66,26 @@ export default function LoginPage({ mode = "admin" }) {
             <Layers size={24} className="text-white" />
           </div>
           <h1 className="text-2xl font-extrabold text-slate-900">{BRAND.name}</h1>
-          <p className="text-sm text-slate-500 mt-1">{mode === "admin" ? "Administration" : "Espace client"}</p>
+          <p className="text-sm text-slate-500 mt-1">
+            {mode === "admin" ? "Administration" : "Espace client"}
+          </p>
         </div>
         <div className="space-y-4">
           {mode === "client" && !paramSlug && (
-            <Inp label="Code client" value={slug} onChange={setSlug} ph="ex: acme-corp" />
+            <Inp label="Code client" value={slug} onChange={setSlug}
+              ph="Le code donné par votre consultant (ex: acme-corp)" />
           )}
           <Inp
             label={mode === "admin" ? "Email" : "Identifiant"}
             value={email} onChange={setEmail}
-            ph={mode === "admin" ? "admin@entreprise.com" : "Votre identifiant"}
-          />
+            ph={mode === "admin" ? "admin@entreprise.com" : "Votre identifiant"} />
           <Inp label="Mot de passe" value={password} onChange={setPassword}
             type="password" ph="••••••••"
             onKeyDown={e => e.key === "Enter" && go()} />
           {error && (
-            <div className="flex items-center gap-2 text-sm text-rose-600 bg-rose-50 p-3 rounded-xl">
-              <AlertCircle size={16} />{error}
+            <div className="flex items-start gap-2 text-sm text-rose-600 bg-rose-50 p-3 rounded-xl">
+              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
           )}
           <Btn onClick={go} disabled={loading} className="w-full" s="lg">
