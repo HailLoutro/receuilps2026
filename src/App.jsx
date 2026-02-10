@@ -8,16 +8,18 @@ import ClientRecueil from "./pages/client/ClientRecueil";
 
 function ProtectedAdmin({ children }) {
   const { ready, user } = useApp();
+  // Si user est déjà admin, pas besoin d'attendre ready
+  if (user?.type === "admin") return children;
   if (!ready) return <LoadingScreen />;
-  if (!user || user.type !== "admin") return <Navigate to="/admin/login" replace />;
-  return children;
+  return <Navigate to="/admin/login" replace />;
 }
 
 function ProtectedClient({ children }) {
   const { ready, user } = useApp();
+  // Si user est déjà client, pas besoin d'attendre ready
+  if (user?.type === "client") return children;
   if (!ready) return <LoadingScreen />;
-  if (!user || user.type !== "client") return <Navigate to="/client" replace />;
-  return children;
+  return <Navigate to="/client" replace />;
 }
 
 function AppRoutes() {
@@ -28,7 +30,6 @@ function AppRoutes() {
 
       <Route path="/client" element={<LoginPage mode="client" />} />
       <Route path="/client/:slug" element={<LoginPage mode="client" />} />
-
       <Route path="/recueil" element={<ProtectedClient><ClientRecueil /></ProtectedClient>} />
 
       <Route path="*" element={<Navigate to="/admin/login" replace />} />

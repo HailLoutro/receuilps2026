@@ -22,92 +22,76 @@ export function AppProvider({ children }) {
   const [cData, setCData] = useState({});
   const [saving, setSaving] = useState(false);
   const [backups, setBackups] = useState([]);
-  const loginBusy = useRef(false);
 
-  // ── Init ───────────────────────────────────────────────────
+  // ── Init : onAuthChange gère le restore de session ─────────
+  // loginClient gère son propre flow SANS dépendre de onAuthChange
   useEffect(() => {
     Auth.onAuthChange(async (authUser) => {
-      // Ne pas interférer si loginClient est en cours
-      if (loginBusy.current) return;
-
-      // Charger le template dans tous les cas
+      // Charger template quoi qu'il arrive
       let t = await DB.getTemplate();
       if (!t) { t = buildDefaultTemplate(); await DB.saveTemplate(t); }
       setTemplate(t);
 
       if (authUser && authUser.role === "admin") {
-        setUser({ type: "admin", ...authUser });
+        setUser(prev => {
+          // Ne pas écraser si déjà connecté en admin
+          if (prev?.type === "admin") return prev;
+          return { type: "admin", ...authUser };
+        });
         setClients(await DB.getClients());
         setBackups(await DB.getBackups());
       } else if (authUser && authUser.role === "client") {
-        // Session client restaurée (refresh page)
-        setUser({ type: "client", ...authUser });
+        setUser(prev => {
+          // Ne pas écraser si déjà connecté en client (loginClient l'a déjà fait)
+          if (prev?.type === "client") return prev;
+          return { type: "client", ...authUser };
+        });
         const d = await DB.getClientData(authUser.slug);
         setCData(d);
-      } else {
-        // Pas de session valide
-        setUser(null);
       }
+      // Pas de else { setUser(null) } — on laisse loginClient gérer
 
       setReady(true);
     });
   }, []);
 
-  // ── Template save (debounced) ──────────────────────────────
-  const _sT = useCallback(async t => {
-    setSaving(true); await DB.saveTemplate(t); setSaving(false);
-  }, []);
+  // ── Template save ──────────────────────────────────────────
+  const _sT = useCallback(async t => { setSaving(true); await DB.saveTemplate(t); setSaving(false); }, []);
   const dbST = useDebounce(_sT, 600);
   const sT = t => { setTemplate(t); dbST(t); };
 
-  // ── Client data save (debounced) ───────────────────────────
-  const _sCD = useCallback(async (slug, d) => {
-    setSaving(true); await DB.saveClientData(slug, d); setSaving(false);
-  }, []);
+  // ── Client data save ──────────────────────────────────────
+  const _sCD = useCallback(async (slug, d) => { setSaving(true); await DB.saveClientData(slug, d); setSaving(false); }, []);
   const dbSCD = useDebounce((s, d) => _sCD(s, d), 600);
   const sCD = (slug, d) => { setCData(d); dbSCD(slug, d); };
 
   const refreshClients = async () => setClients(await DB.getClients());
+  const lCD = async slug => { const d = await DB.getClientData(slug); setCData(d); return d; };
 
-  const lCD = async slug => {
-    const d = await DB.getClientData(slug);
-    setCData(d);
-    return d;
-  };
-
-  // ── Client login ───────────────────────────────────────────
+  // ── Client login (self-contained, ne dépend pas de onAuthChange) ──
   const loginClient = async (slug, username, password) => {
-    loginBusy.current = true;
     try {
       const client = await Auth.loginClient(slug, username, password);
-      if (!client) { loginBusy.current = false; return false; }
+      if (!client) return false;
 
-      // Charger template + données
       let t = await DB.getTemplate();
       if (!t) { t = buildDefaultTemplate(); await DB.saveTemplate(t); }
       setTemplate(t);
+
       const d = await DB.getClientData(client.slug);
       setCData(d);
-
-      // Setter le user en dernier (déclenche la navigation)
       setUser(client);
-      loginBusy.current = false;
+      setReady(true); // ← CRITIQUE : garantit que ready=true après login
       return true;
     } catch (err) {
-      console.error("loginClient ctx error:", err);
-      loginBusy.current = false;
+      console.error("loginClient error:", err);
       return false;
     }
   };
 
-  // ── Backup / Restore ───────────────────────────────────────
+  // ── Backup / Restore ──────────────────────────────────────
   const backupTpl = async label => {
-    const b = {
-      id: `bk_${Date.now()}`,
-      label: label || `Backup ${new Date().toLocaleString("fr-FR")}`,
-      template: JSON.parse(JSON.stringify(template)),
-      createdAt: new Date().toISOString(),
-    };
+    const b = { id: `bk_${Date.now()}`, label: label || `Backup ${new Date().toLocaleString("fr-FR")}`, template: JSON.parse(JSON.stringify(template)), createdAt: new Date().toISOString() };
     const nb = [b, ...backups].slice(0, 20);
     setBackups(nb); await DB.saveBackups(nb);
   };
@@ -117,10 +101,11 @@ export function AppProvider({ children }) {
     setTemplate(b.template); await DB.saveTemplate(b.template);
   };
 
-  // ── Logout ─────────────────────────────────────────────────
+  // ── Logout ────────────────────────────────────────────────
   const logout = async () => {
     await Auth.logoutUser();
-    setUser(null); setCData({});
+    setUser(null);
+    setCData({});
   };
 
   return (

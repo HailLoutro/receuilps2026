@@ -1,4 +1,5 @@
 // ━━━ CLIENT RECUEIL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// FIX #2 : contenu pleine largeur (suppression max-w)
 import { useState, useEffect } from "react";
 import {
   Layers, ChevronLeft, Menu, LogOut, Clock, CheckCircle2,
@@ -96,7 +97,6 @@ export default function ClientRecueil() {
     }
   };
 
-  // ── Layout ─────────────────────────────────────────────────
   return (
     <div className="flex h-screen overflow-hidden" style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", background: "#f1f5f9" }}>
       <link href={BRAND.font} rel="stylesheet" />
@@ -105,7 +105,7 @@ export default function ClientRecueil() {
       <aside className={`${sidebarOpen ? "w-72" : "w-0 md:w-16"} bg-[#0a0e3a] text-white flex flex-col transition-all duration-300 overflow-hidden flex-shrink-0`}>
         <div className="p-4 flex items-center gap-3 border-b border-white/10">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-violet-500 flex items-center justify-center flex-shrink-0"><Layers size={18} /></div>
-          {sidebarOpen && <div className="min-w-0"><div className="font-bold text-sm">{BRAND.name}</div><div className="text-xs text-blue-300 truncate">{user.name || user.username}</div></div>}
+          {sidebarOpen && <div className="min-w-0"><div className="font-bold text-sm">{BRAND.name}</div><div className="text-xs text-blue-300 truncate">{user?.name || user?.username}</div></div>}
         </div>
 
         {sidebarOpen && (
@@ -142,7 +142,7 @@ export default function ClientRecueil() {
         </div>
       </aside>
 
-      {/* Main */}
+      {/* Main — FIX #2 : pleine largeur */}
       <main className="flex-1 overflow-y-auto">
         <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-xl border-b border-slate-200 px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -155,7 +155,8 @@ export default function ClientRecueil() {
           <div className="flex items-center gap-2 text-xs text-slate-500"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Auto-save</div>
         </div>
 
-        <div className="p-6 md:p-8 max-w-[1100px] mx-auto space-y-6">
+        {/* FIX #2 : suppression du max-w-[1100px], padding réduit */}
+        <div className="p-6 space-y-6">
           {page
             ? page.blocks.map(b => <div key={b.id}>{renderBlock(b)}</div>)
             : <Empty icon={BookOpen} title="Bienvenue" desc="Sélectionnez une section dans le menu pour commencer" />}
