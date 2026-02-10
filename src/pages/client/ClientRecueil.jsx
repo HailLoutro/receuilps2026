@@ -1,5 +1,4 @@
 // ━━━ CLIENT RECUEIL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// FIX #2 : contenu pleine largeur (suppression max-w)
 import { useState, useEffect } from "react";
 import {
   Layers, ChevronLeft, Menu, LogOut, Clock, CheckCircle2,
@@ -9,9 +8,10 @@ import { useApp } from "../../context/AppContext";
 import { BRAND, ICONS, uid } from "../../config/constants";
 import { Empty } from "../../components/ui";
 import InlineTable from "../../components/editor/InlineTable";
+import { getFullColumns, getRows } from "../../helpers/roles";
 
 export default function ClientRecueil() {
-  const { user, template, cData, sCD, logout, saving } = useApp();
+  const { user, template, cData, sCD, logout, saving, roles } = useApp();
   const [activePage, setActivePage] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const pages = template.pages || [];
@@ -25,17 +25,35 @@ export default function ClientRecueil() {
     sCD(user.slug, { ...cData, [activePage]: { ...pageData, [blockId]: data } });
   };
 
-  const getTableRows = block =>
-    pageData[block.id]?.rows || (block.content?.defaultRows || []).map(r => ({ ...r }));
-
+  // ── Progression : basée sur les cellules remplies ──────────
   const calcPageProgress = p => {
     const tables = p.blocks.filter(b => b.type === "table");
     if (!tables.length) return 100;
     const d = cData[p.id] || {};
-    return Math.round(tables.filter(b => d[b.id]?.rows?.length > 0).length / tables.length * 100);
+    let filled = 0, total = 0;
+    for (const bl of tables) {
+      const bd = d[bl.id];
+      const rows = bd?.rows || bl.content?.defaultRows || [];
+      const cols = getFullColumns(bl, bd, roles);
+      const editableCols = cols.filter(c => c.type !== "check");
+      for (const row of rows) {
+        for (const col of editableCols) {
+          total++;
+          if (row[col.key] && String(row[col.key]).trim()) filled++;
+        }
+      }
+    }
+    return total === 0 ? 0 : Math.round(filled / total * 100);
   };
   const totalProgress = pages.length
     ? Math.round(pages.reduce((a, p) => a + calcPageProgress(p), 0) / pages.length) : 0;
+
+  // ── Section status badge ───────────────────────────────────
+  const statusBadge = pr => {
+    if (pr === 0) return { label: "À faire", cls: "text-amber-400/80" };
+    if (pr >= 100) return { label: "Terminé", cls: "text-emerald-400" };
+    return { label: `${pr}%`, cls: "text-blue-400/70" };
+  };
 
   // ── Block rendering ────────────────────────────────────────
   const renderBlock = block => {
@@ -61,26 +79,26 @@ export default function ClientRecueil() {
           </div>
         ) : null;
       case "table": {
-        const rows = getTableRows(block);
-        const cols = c.columns || [];
-        const extraCols = pageData[block.id]?.extraCols || [];
-        const allCols = [...cols, ...extraCols];
+        const bd = pageData[block.id] || {};
+        const rows = getRows(block, bd);
+        const allCols = getFullColumns(block, bd, roles);
 
         const updateRow = (ri, key, val) => {
           const nr = [...rows]; nr[ri] = { ...nr[ri], [key]: val };
-          updateBlockData(block.id, { ...pageData[block.id], rows: nr });
+          updateBlockData(block.id, { ...bd, rows: nr });
         };
         const addRow = () => {
-          const r = { _id: uid("r") }; allCols.forEach(col => { r[col.key] = ""; });
-          updateBlockData(block.id, { ...pageData[block.id], rows: [...rows, r] });
+          const r = { _id: uid("r") }; allCols.forEach(col => r[col.key] = "");
+          updateBlockData(block.id, { ...bd, rows: [...rows, r] });
         };
         const deleteRow = ri => {
-          updateBlockData(block.id, { ...pageData[block.id], rows: rows.filter((_, j) => j !== ri) });
+          updateBlockData(block.id, { ...bd, rows: rows.filter((_, j) => j !== ri) });
         };
         const addColumn = () => {
           const name = prompt("Nom de la colonne :"); if (!name) return;
+          const extraCols = bd.extraCols || [];
           updateBlockData(block.id, {
-            ...pageData[block.id],
+            ...bd,
             extraCols: [...extraCols, { key: `ec_${uid()}`, label: name, type: "text", minWidth: "140px" }],
           });
         };
@@ -88,8 +106,14 @@ export default function ClientRecueil() {
         return (
           <div>
             {c.title && <h3 className="font-bold text-slate-800 mb-3">{c.title}</h3>}
+            {(c.roleCols || c.roleOptions) && roles.length > 0 && (
+              <div className="mb-2 flex items-center gap-2 text-xs text-indigo-500">
+                <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                Les colonnes en violet sont ajoutées automatiquement depuis vos rôles ({roles.length})
+              </div>
+            )}
             <InlineTable columns={allCols} rows={rows} onUR={updateRow} onAR={c.allowAddRows !== false ? addRow : undefined} onDR={deleteRow} edit />
-            {c.allowAddCols && <button onClick={addColumn} className="mt-2 flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700"><Plus size={12} /> Ajouter une colonne</button>}
+            {c.allowAddCols && <button onClick={addColumn} className="mt-2 flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 font-medium"><Plus size={12} /> Ajouter une colonne</button>}
           </div>
         );
       }
@@ -110,22 +134,29 @@ export default function ClientRecueil() {
 
         {sidebarOpen && (
           <div className="px-4 py-3 border-b border-white/10">
-            <div className="flex items-center justify-between text-xs mb-1.5"><span className="text-blue-300">Progression</span><span className="text-white font-bold">{totalProgress}%</span></div>
-            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-400 to-violet-400 rounded-full transition-all duration-500" style={{ width: `${totalProgress}%` }} /></div>
+            <div className="flex items-center justify-between text-xs mb-1.5">
+              <span className="text-blue-300">Progression globale</span>
+              <span className="text-white font-bold">{totalProgress}%</span>
+            </div>
+            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full transition-all duration-700 ${totalProgress >= 80 ? "bg-emerald-400" : totalProgress >= 40 ? "bg-blue-400" : "bg-amber-400"}`}
+                style={{ width: `${totalProgress}%` }} />
+            </div>
           </div>
         )}
 
-        <nav className="flex-1 overflow-y-auto p-2">
+        <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {pages.map(p => {
             const Ic = ICONS[p.icon] || FileText;
             const pr = calcPageProgress(p);
+            const st = statusBadge(pr);
             return (
               <button key={p.id} onClick={() => setActivePage(p.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm mb-0.5 transition-all ${activePage === p.id ? "bg-white/15 text-white font-semibold" : "text-blue-200/60 hover:bg-white/5 hover:text-white"}`}>
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${activePage === p.id ? "bg-white/15 text-white font-semibold" : "text-blue-200/60 hover:bg-white/5 hover:text-white"}`}>
                 <Ic size={16} className="flex-shrink-0" />
                 {sidebarOpen && <>
                   <span className="truncate flex-1 text-left">{p.title}</span>
-                  <span className={`text-[10px] font-bold ${pr >= 70 ? "text-emerald-400" : pr >= 30 ? "text-blue-400/70" : "text-amber-400/70"}`}>{pr}%</span>
+                  <span className={`text-[10px] font-bold ${st.cls}`}>{st.label}</span>
                 </>}
               </button>
             );
@@ -138,11 +169,11 @@ export default function ClientRecueil() {
               ? <span className="flex items-center gap-1"><Clock size={10} className="animate-spin" /> Sauvegarde...</span>
               : <span className="flex items-center gap-1"><CheckCircle2 size={10} className="text-emerald-400" /> Sauvegardé</span>}
           </div>
-          <button onClick={logout} className="text-blue-300/60 hover:text-white"><LogOut size={16} /></button>
+          <button onClick={() => { if (confirm("Se déconnecter ?")) logout(); }} className="text-blue-300/60 hover:text-white"><LogOut size={16} /></button>
         </div>
       </aside>
 
-      {/* Main — FIX #2 : pleine largeur */}
+      {/* Main */}
       <main className="flex-1 overflow-y-auto">
         <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-xl border-b border-slate-200 px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -155,11 +186,10 @@ export default function ClientRecueil() {
           <div className="flex items-center gap-2 text-xs text-slate-500"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Auto-save</div>
         </div>
 
-        {/* FIX #2 : suppression du max-w-[1100px], padding réduit */}
         <div className="p-6 space-y-6">
           {page
             ? page.blocks.map(b => <div key={b.id}>{renderBlock(b)}</div>)
-            : <Empty icon={BookOpen} title="Bienvenue" desc="Sélectionnez une section dans le menu pour commencer" />}
+            : <Empty icon={BookOpen} title="Bienvenue" desc="Sélectionnez une section dans le menu" />}
         </div>
       </main>
     </div>

@@ -10,15 +10,22 @@ const cache = {};
 // ── Template ─────────────────────────────────────────────────
 
 export async function getTemplate() {
-  if (cache.template) return cache.template;
+  // TOUJOURS lire Firestore (pas de cache pour le template — évite les templates "disparus")
   try {
     const snap = await getDoc(doc(db, "template", "current"));
-    const val = snap.exists() ? snap.data() : null;
-    cache.template = val;
-    return val;
+    if (snap.exists()) {
+      const val = snap.data();
+      // Vérification basique que c'est un vrai template
+      if (val && val.pages && val.pages.length > 0) {
+        cache.template = val;
+        return val;
+      }
+    }
+    return null;
   } catch (err) {
     console.warn("getTemplate:", err);
-    return null;
+    // En cas d'erreur réseau, retourner le cache s'il existe
+    return cache.template || null;
   }
 }
 
