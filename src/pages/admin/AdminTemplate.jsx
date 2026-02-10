@@ -1,18 +1,16 @@
 // ━━━ ADMIN TEMPLATE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 import { useState } from "react";
 import {
-  Plus, X, Layout, FileText, ChevronDown, Monitor,
-  GripVertical, ArrowUp, ArrowDown, Trash2, RotateCcw, AlertTriangle, Link,
+  Plus, X, Layout, FileText, Monitor, GripVertical, RotateCcw,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { ICONS, uid } from "../../config/constants";
+import { ICONS, uid, BLOCK_TYPES } from "../../config/constants";
 import { Btn, Inp, Sel, Card, Modal, Empty } from "../../components/ui";
 import BEditor from "../../components/editor/BlockEditor";
 import BlockPreview from "../../components/editor/BlockPreview";
-import { BLOCK_TYPES } from "../../config/constants";
 
 export default function AdminTemplate() {
-  const { template, sT: saveTemplate, roles, resetTemplate } = useApp();
+  const { template, sT: saveTemplate, templateRoles, resetTemplate } = useApp();
   const [ap, setAp] = useState(null);
   const [showAB, setShowAB] = useState(false);
   const [showAP, setShowAP] = useState(false);
@@ -37,7 +35,7 @@ export default function AdminTemplate() {
     if (to < 0 || to >= pages.length) return;
     const a = [...pages]; const [item] = a.splice(from, 1); a.splice(to, 0, item); uP(a);
   };
-  const upPage = (id, field, val) => uP(pages.map(p => p.id === id ? { ...p, [field]: val } : p));
+  const upPage = (id, f, v) => uP(pages.map(p => p.id === id ? { ...p, [f]: v } : p));
 
   // ── Block CRUD ─────────────────────────────────────────────
   const defBC = t => {
@@ -64,38 +62,55 @@ export default function AdminTemplate() {
     uP(pages.map(p => p.id === page.id ? { ...p, blocks: a } : p));
   };
 
-  // ── Role propagation info ──────────────────────────────────
-  const blockMeta = block => {
+  // ── Block meta tags ────────────────────────────────────────
+  const blockTags = block => {
     if (block.type !== "table") return null;
     const c = block.content || {};
     const tags = [];
-    if (c.roleSource) tags.push({ label: "Source des rôles", icon: "🔑", color: "bg-amber-100 text-amber-700" });
-    if (c.roleCols) tags.push({ label: `Colonnes auto (${c.roleCols.split(":")[0]})`, icon: "🔗", color: "bg-indigo-100 text-indigo-700" });
-    if (c.roleOptions) tags.push({ label: "Options = rôles", icon: "📋", color: "bg-violet-100 text-violet-700" });
-    if (c.allowAddRows) tags.push({ label: "Client +lignes", icon: "➕", color: "bg-emerald-100 text-emerald-700" });
-    if (c.allowAddCols) tags.push({ label: "Client +colonnes", icon: "🧩", color: "bg-blue-100 text-blue-700" });
+    if (c.roleSource) tags.push({ label: "🔑 Source des rôles standards", color: "bg-amber-100 text-amber-700 border-amber-200" });
+    if (c.roleCols) tags.push({ label: `🔗 +1 col. ${c.roleCols.split(":")[0]} par rôle`, color: "bg-indigo-100 text-indigo-700 border-indigo-200" });
+    if (c.roleOptions) tags.push({ label: "📋 Selects = rôles", color: "bg-violet-100 text-violet-700 border-violet-200" });
+    if (c.allowAddRows) tags.push({ label: "➕ Client +lignes", color: "bg-emerald-100 text-emerald-700 border-emerald-200" });
+    if (c.allowAddCols) tags.push({ label: "🧩 Client +colonnes", color: "bg-blue-100 text-blue-700 border-blue-200" });
     return tags.length ? tags : null;
   };
 
+  // ── Count propagation targets ──────────────────────────────
+  const propagationCount = () => {
+    let cols = 0, opts = 0;
+    for (const p of pages) {
+      for (const b of p.blocks) {
+        if (b.type === "table") {
+          if (b.content?.roleCols) cols++;
+          if (b.content?.roleOptions) opts++;
+        }
+      }
+    }
+    return { cols, opts };
+  };
+  const propCount = propagationCount();
+
   return (
     <div className="flex gap-6 h-[calc(100vh-80px)]">
-      {/* Sidebar pages */}
-      <div className="w-64 flex-shrink-0 flex flex-col">
+      {/* Sidebar pages + roles */}
+      <div className="w-72 flex-shrink-0 flex flex-col">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-slate-800 text-sm">Pages ({pages.length})</h3>
           <div className="flex gap-1">
-            <Btn v="ghost" s="sm" onClick={() => setShowAP(true)}><Plus size={14} /></Btn>
-            <Btn v="ghost" s="sm" onClick={() => { if (confirm("Réinitialiser tout le template ? Les données clients ne seront pas affectées.")) resetTemplate(); }}
-              className="text-amber-600 hover:bg-amber-50" title="Réinitialiser le template par défaut"><RotateCcw size={14} /></Btn>
+            <Btn v="ghost" s="sm" onClick={() => setShowAP(true)} title="Nouvelle page"><Plus size={14} /></Btn>
+            <Btn v="ghost" s="sm" onClick={() => { if (confirm("Réinitialiser le template par défaut ?\nLes données clients ne seront pas affectées.")) resetTemplate(); }}
+              className="text-amber-600 hover:bg-amber-50" title="Réinitialiser"><RotateCcw size={14} /></Btn>
           </div>
         </div>
+
         <div className="flex-1 overflow-y-auto space-y-1">
           {pages.map((p, i) => {
             const Ic = ICONS[p.icon] || FileText;
             return (
               <div key={p.id}
                 className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm cursor-pointer transition-all group ${ap === p.id ? "bg-[#1a1f6c] text-white shadow-md" : "hover:bg-slate-100 text-slate-700"}`}
-                draggable onDragStart={e => e.dataTransfer.setData("pg", String(i))} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = parseInt(e.dataTransfer.getData("pg")); if (!isNaN(f)) movePage(f, i); }}
+                draggable onDragStart={e => e.dataTransfer.setData("pg", String(i))} onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const f = parseInt(e.dataTransfer.getData("pg")); if (!isNaN(f)) movePage(f, i); }}
                 onClick={() => setAp(p.id)}>
                 <GripVertical size={12} className={`cursor-grab ${ap === p.id ? "text-white/50" : "text-slate-400"}`} />
                 <Ic size={16} className="flex-shrink-0" />
@@ -110,15 +125,24 @@ export default function AdminTemplate() {
           })}
         </div>
 
-        {/* Roles info */}
-        <div className="mt-3 border-t border-slate-200 pt-3">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Rôles détectés</div>
-          {roles.length ? (
+        {/* ── Rôles standards panel ────────────────────────────── */}
+        <div className="mt-3 border-t border-slate-200 pt-3 space-y-2">
+          <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">Rôles standards ({templateRoles.length})</div>
+          <p className="text-[10px] text-slate-400 leading-snug">
+            Définis dans le tableau source 🔑. Chaque nouveau client démarre avec ces rôles. Le client peut ensuite ajouter/supprimer ses propres rôles.
+          </p>
+          {templateRoles.length ? (
             <div className="flex flex-wrap gap-1">
-              {roles.map(r => <span key={r} className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-semibold">{r}</span>)}
+              {templateRoles.map(r => (
+                <span key={r} className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-semibold border border-amber-200">{r}</span>
+              ))}
             </div>
-          ) : <p className="text-xs text-slate-400 italic">Aucun rôle (le client doit remplir "Rôles & Accès")</p>}
-          <p className="text-[10px] text-slate-400 mt-1.5 leading-snug">Les rôles se propagent automatiquement dans les tableaux marqués 🔗</p>
+          ) : <p className="text-xs text-slate-400 italic">Aucun — ajoutez un tableau avec 🔑 Source des rôles</p>}
+
+          <div className="text-[10px] text-slate-400 space-y-0.5">
+            <div>🔗 {propCount.cols} tableau(x) avec colonnes auto par rôle</div>
+            <div>📋 {propCount.opts} tableau(x) avec options = rôles</div>
+          </div>
         </div>
       </div>
 
@@ -135,18 +159,17 @@ export default function AdminTemplate() {
 
           {previewAll ? (
             <Card className="p-6 space-y-6">
-              <div className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Aperçu client</div>
+              <div className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Aperçu client (avec rôles standards)</div>
               {page.blocks.map(b => <div key={b.id}><BlockPreview block={b} /></div>)}
             </Card>
           ) : <>
             {page.blocks.map((b, i) => (
               <div key={b.id}>
-                {/* Role propagation tags */}
-                {blockMeta(b) && (
+                {blockTags(b) && (
                   <div className="flex flex-wrap gap-1.5 mb-1.5">
-                    {blockMeta(b).map((tag, ti) => (
-                      <span key={ti} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${tag.color}`}>
-                        {tag.icon} {tag.label}
+                    {blockTags(b).map((tag, ti) => (
+                      <span key={ti} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${tag.color}`}>
+                        {tag.label}
                       </span>
                     ))}
                   </div>
@@ -159,12 +182,9 @@ export default function AdminTemplate() {
               <Plus size={18} /> Ajouter un bloc
             </button>
           </>}
-        </div> : (
-          <Empty icon={Layout} title="Sélectionnez une page" desc="Choisissez une page à gauche ou créez-en une" />
-        )}
+        </div> : <Empty icon={Layout} title="Sélectionnez une page" desc="Choisissez une page à gauche ou créez-en une" />}
       </div>
 
-      {/* Modal: add block */}
       <Modal open={showAB} onClose={() => setShowAB(false)} title="Ajouter un bloc">
         <div className="grid grid-cols-2 gap-3">
           {BLOCK_TYPES.map(bt => (
@@ -177,7 +197,6 @@ export default function AdminTemplate() {
         </div>
       </Modal>
 
-      {/* Modal: new page */}
       <Modal open={showAP} onClose={() => setShowAP(false)} title="Nouvelle page">
         <div className="space-y-4">
           <Inp label="Titre" value={np.title} onChange={v => setNp({ ...np, title: v })} />

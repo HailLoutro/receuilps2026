@@ -3,7 +3,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, us
 import * as Auth from "../services/auth";
 import * as DB from "../services/database";
 import buildDefaultTemplate from "../config/defaultTemplate";
-import { extractRoles } from "../helpers/roles";
+import { extractTemplateRoles, extractClientRoles } from "../helpers/roles";
 
 const AppContext = createContext(null);
 
@@ -24,17 +24,20 @@ export function AppProvider({ children }) {
   const [saving, setSaving] = useState(false);
   const [backups, setBackups] = useState([]);
 
-  // ── Rôles dynamiques (recalculés à chaque changement) ──────
-  const roles = useMemo(() => extractRoles(template, cData), [template, cData]);
+  // ── Rôles standards (définis par l'admin dans le template) ──
+  const templateRoles = useMemo(() => extractTemplateRoles(template), [template]);
 
-  // ── Charger le template (JAMAIS écraser un template existant) ──
+  // ── Rôles du client courant (spécifiques à CE client) ──────
+  // Recalculé à chaque changement de template OU de données client
+  const clientRoles = useMemo(() => extractClientRoles(template, cData), [template, cData]);
+
+  // ── Charger le template ────────────────────────────────────
   const loadTemplate = async () => {
     let t = await DB.getTemplate();
     if (t && t.pages && t.pages.length > 0) {
       setTemplate(t);
       return t;
     }
-    // Aucun template → créer le défaut
     t = buildDefaultTemplate();
     await DB.saveTemplate(t);
     setTemplate(t);
@@ -100,12 +103,9 @@ export function AppProvider({ children }) {
     if (!b) return;
     setTemplate(b.template); await DB.saveTemplate(b.template);
   };
-
-  // ── Réinitialiser le template ──────────────────────────────
   const resetTemplate = async () => {
     const t = buildDefaultTemplate();
-    setTemplate(t);
-    await DB.saveTemplate(t);
+    setTemplate(t); await DB.saveTemplate(t);
   };
 
   // ── Logout ────────────────────────────────────────────────
@@ -113,7 +113,8 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      ready, user, clients, template, cData, saving, backups, roles,
+      ready, user, clients, template, cData, saving, backups,
+      templateRoles, clientRoles,
       sT, sCD, lCD, loginClient, refreshClients, logout,
       backupTpl, restoreTpl, resetTemplate,
     }}>

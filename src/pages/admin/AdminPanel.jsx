@@ -2,7 +2,7 @@
 import { useState } from "react";
 import {
   Layers, Users, Pencil, Download, Archive, Lock, LogOut,
-  Clock, CheckCircle2, Shield,
+  Clock, CheckCircle2,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { BRAND } from "../../config/constants";
@@ -13,33 +13,31 @@ import AdminBackups from "./AdminBackups";
 import AdminAdmins from "./AdminAdmins";
 
 const NAV = [
-  { id: "clients", label: "Clients", icon: Users, desc: "Gérer les comptes clients" },
-  { id: "template", label: "Éditeur de template", icon: Pencil, desc: "Configurer les pages et blocs" },
-  { id: "export", label: "Export recueils", icon: Download, desc: "Visualiser et exporter les données" },
-  { id: "backups", label: "Sauvegardes", icon: Archive, desc: "Sauvegarder et restaurer le template" },
-  { id: "admins", label: "Administrateurs", icon: Lock, desc: "Gérer les comptes admin" },
+  { id: "clients", label: "Clients", icon: Users },
+  { id: "template", label: "Éditeur de template", icon: Pencil },
+  { id: "export", label: "Export recueils", icon: Download },
+  { id: "backups", label: "Sauvegardes", icon: Archive },
+  { id: "admins", label: "Administrateurs", icon: Lock },
 ];
 
 export default function AdminPanel() {
-  const { logout, saving, clients, template, roles } = useApp();
+  const { logout, saving, clients, template, templateRoles } = useApp();
   const [view, setView] = useState("clients");
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", background: "#f1f5f9" }}>
       <link href={BRAND.font} rel="stylesheet" />
 
-      {/* Sidebar */}
       <aside className="w-60 bg-[#0a0e3a] text-white flex flex-col flex-shrink-0">
         <div className="p-5 flex items-center gap-3 border-b border-white/10">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-violet-500 flex items-center justify-center"><Layers size={18} /></div>
           <div><div className="font-bold text-sm">{BRAND.name}</div><div className="text-xs text-blue-300">Administration</div></div>
         </div>
 
-        {/* Stats rapides */}
         <div className="px-5 py-3 border-b border-white/10 space-y-1">
           <div className="flex justify-between text-xs"><span className="text-blue-300/70">Clients</span><span className="text-white font-bold">{clients.length}</span></div>
-          <div className="flex justify-between text-xs"><span className="text-blue-300/70">Pages</span><span className="text-white font-bold">{template.pages?.length || 0}</span></div>
-          <div className="flex justify-between text-xs"><span className="text-blue-300/70">Rôles (défaut)</span><span className="text-white font-bold">{roles.length}</span></div>
+          <div className="flex justify-between text-xs"><span className="text-blue-300/70">Pages template</span><span className="text-white font-bold">{template.pages?.length || 0}</span></div>
+          <div className="flex justify-between text-xs"><span className="text-blue-300/70">Rôles standards</span><span className="text-white font-bold">{templateRoles.length}</span></div>
         </div>
 
         <nav className="flex-1 p-3 space-y-1">
@@ -61,7 +59,6 @@ export default function AdminPanel() {
         </div>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 overflow-y-auto p-8">
         <div className="max-w-[1400px] mx-auto">
           {view === "clients" && <AdminClients />}

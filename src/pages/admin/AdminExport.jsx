@@ -1,14 +1,11 @@
 // ━━━ ADMIN EXPORT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// FIX #3 : l'export inclut les lignes/colonnes ajoutées par le client
-//          + les colonnes dynamiques de rôle
+// Export inclut : colonnes template + colonnes client (extraCols) + colonnes rôles dynamiques
 import { useState } from "react";
-import {
-  Download, FileSpreadsheet, FileJson, Clock, Users,
-} from "lucide-react";
+import { Download, FileSpreadsheet, FileJson, Clock, Users } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { Btn, Card, Empty } from "../../components/ui";
 import InlineTable from "../../components/editor/InlineTable";
-import { extractRoles, getFullColumns, getRows } from "../../helpers/roles";
+import { extractClientRoles, getFullColumns, getRows } from "../../helpers/roles";
 import * as DB from "../../services/database";
 
 export default function AdminExport() {
@@ -24,19 +21,25 @@ export default function AdminExport() {
     setLoading(false);
   };
 
-  const getRoles = () => extractRoles(template, data || {});
+  // Rôles spécifiques au client sélectionné
+  const getRoles = () => data ? extractClientRoles(template, data) : [];
 
-  // ── Export JSON ────────────────────────────────────────────
   const expJSON = () => {
     const roles = getRoles();
-    const exportData = { client: { name: sel.name, slug: sel.slug }, template, clientData: data, roles, exportedAt: new Date().toISOString() };
+    const exportData = {
+      client: { name: sel.name, slug: sel.slug },
+      roles,
+      template,
+      clientData: data,
+      exportedAt: new Date().toISOString(),
+    };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `recueil-${sel.slug}.json`; a.click(); URL.revokeObjectURL(url);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `recueil-${sel.slug}.json`; a.click();
+    URL.revokeObjectURL(url);
   };
 
-  // ── Export Excel ───────────────────────────────────────────
   const expXLSX = async () => {
-    // Dynamic import SheetJS
     const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     const roles = getRoles();
@@ -48,15 +51,11 @@ export default function AdminExport() {
         const cols = getFullColumns(bl, bd, roles);
         const rows = getRows(bl, bd);
 
-        // En-têtes
         const header = cols.map(c => c.label);
-        // Données
-        const rowData = rows.map(r =>
-          cols.map(c => {
-            const v = r[c.key] || "";
-            return typeof v === "string" ? v.replace(/\n/g, " — ") : v;
-          })
-        );
+        const rowData = rows.map(r => cols.map(c => {
+          const v = r[c.key] || "";
+          return typeof v === "string" ? v.replace(/\n/g, " — ") : v;
+        }));
 
         const ws = XLSX.utils.aoa_to_sheet([header, ...rowData]);
         ws["!cols"] = cols.map(c => ({ wch: Math.max(String(c.label).length, 12) + 2 }));
@@ -74,7 +73,7 @@ export default function AdminExport() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-extrabold text-slate-900">Export des recueils</h2>
-        <p className="text-slate-500 text-sm mt-1">Sélectionnez un client pour visualiser et exporter ses données</p>
+        <p className="text-slate-500 text-sm mt-1">Visualisez et exportez les données propres à chaque client</p>
       </div>
 
       {!clients.length ? (
@@ -101,7 +100,7 @@ export default function AdminExport() {
                   Données de <span className="text-[#1a1f6c]">{sel.name}</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {getRoles().length} rôle(s) détecté(s) — inclus dans l'export
+                  Rôles de ce client : {getRoles().length ? getRoles().join(", ") : "aucun (valeurs par défaut du template)"}
                 </p>
               </div>
               <div className="flex gap-3">

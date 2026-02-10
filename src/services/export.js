@@ -2,14 +2,14 @@
 // FIX #3 : subtitle handling in export (line breaks → " — ")
 // Role columns + extra columns included
 
-import { extractRoles, getFullColumns, getRows } from "../helpers/roles";
+import { extractClientRoles, getFullColumns, getRows } from "../helpers/roles";
 
 /**
  * Build a flat array of sheet-ready data for a given client.
  * Each entry: { sheetName, header, rows }
  */
 export function buildExportSheets(template, clientData) {
-  const roles = extractRoles(template, clientData);
+  const roles = extractClientRoles(template, clientData);
   const sheets = [];
 
   for (const page of (template.pages || [])) {
